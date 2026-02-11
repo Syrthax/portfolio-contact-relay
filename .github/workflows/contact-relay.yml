@@ -1,79 +1,61 @@
-name: Contact Relay via OAuth
+name: Contact Relay
 
 on:
-  repository_dispatch:
-    types: [contact_request]
+  workflow_dispatch:
+    inputs:
+      name:
+        description: "Sender name"
+        required: false
+        type: string
+      message:
+        description: "Contact message"
+        required: true
+        type: string
 
 permissions:
   issues: write
 
 jobs:
-  relay-contact:
+  create-issue:
     runs-on: ubuntu-latest
     steps:
-      - name: Exchange OAuth code for access token
-        id: oauth
+      - name: Create contact issue
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const name = `${{ inputs.name }}` || 'Not provided';
+            const message = `${{ inputs.message }}`;
+
+            // Get the actor who triggered the workflow (the OAuth user)
+            const sender = context.actor;
+
+            const body = [
+              '---',
+              `**Name:** ${name}`,
+              `**GitHub:** @${sender}`,
+              '',
+              '**Message:**',
+              message,
+              '',
+              '---',
+              '_Submitted via [sarthakg.tech](https://sarthakg.tech) contact form_'
+            ].join('\n');
+
+            const issue = await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `Contact from @${sender}`,
+              body: body,
+              labels: ['contact']
+            });
+
+            core.info(`Issue created: ${issue.data.html_url}`);
+
+      - name: Log result
+        if: always()
         run: |
-          RESPONSE=$(curl -s -X POST https://github.com/login/oauth/access_token \
-            -H "Accept: application/json" \
-            -d "client_id=${{ secrets.OAUTH_CLIENT_ID }}" \
-            -d "client_secret=${{ secrets.OAUTH_CLIENT_SECRET }}" \
-            -d "code=${{ github.event.client_payload.code }}")
-
-          echo "OAuth response received"
-
-          ACCESS_TOKEN=$(echo "$RESPONSE" | jq -r '.access_token')
-
-          if [ -z "$ACCESS_TOKEN" ] || [ "$ACCESS_TOKEN" = "null" ]; then
-            echo "::error::Failed to obtain access token"
-            echo "Error details: $(echo "$RESPONSE" | jq -r '.error_description // .error // "unknown"')"
-            exit 1
+          if [ "${{ job.status }}" = "success" ]; then
+            echo "✅ Contact issue created successfully"
+          else
+            echo "❌ Failed to create contact issue"
           fi
-
-          echo "::add-mask::$ACCESS_TOKEN"
-          echo "token=$ACCESS_TOKEN" >> "$GITHUB_OUTPUT"
-          echo "✅ Access token obtained successfully"
-
-      - name: Fetch authenticated GitHub user
-        id: user
-        run: |
-          USER_RESPONSE=$(curl -s -H "Authorization: Bearer ${{ steps.oauth.outputs.token }}" \
-            https://api.github.com/user)
-
-          USERNAME=$(echo "$USER_RESPONSE" | jq -r '.login')
-
-          if [ -z "$USERNAME" ] || [ "$USERNAME" = "null" ]; then
-            echo "::error::Failed to fetch GitHub user"
-            echo "Error details: $(echo "$USER_RESPONSE" | jq -r '.message // "unknown"')"
-            exit 1
-          fi
-
-          echo "username=$USERNAME" >> "$GITHUB_OUTPUT"
-          echo "✅ Authenticated user: $USERNAME"
-
-      - name: Create issue in repository
-        run: |
-          MESSAGE=$(echo '${{ github.event.client_payload.message }}' | jq -Rs .)
-
-          ISSUE_BODY=$(jq -n \
-            --arg title "Contact from @${{ steps.user.outputs.username }}" \
-            --arg body "$(echo '${{ github.event.client_payload.message }}')\n\nSubmitted by: @${{ steps.user.outputs.username }}" \
-            '{title: $title, body: $body}')
-
-          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
-            "https://api.github.com/repos/${{ github.repository }}/issues" \
-            -H "Authorization: Bearer ${{ secrets.RELAY_TOKEN }}" \
-            -H "Accept: application/vnd.github+json" \
-            -d "$ISSUE_BODY")
-
-          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
-          BODY=$(echo "$RESPONSE" | sed '$d')
-
-          if [ "$HTTP_CODE" -ne 201 ]; then
-            echo "::error::Failed to create issue (HTTP $HTTP_CODE)"
-            echo "Response: $BODY"
-            exit 1
-          fi
-
-          ISSUE_URL=$(echo "$BODY" | jq -r '.html_url')
-          echo "✅ Issue created successfully: $ISSUE_URL"
