@@ -1,84 +1,66 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Contact — Sarthak G</title>
-  <link rel="stylesheet" href="styles.css" />
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Contact — Sarthak</title>
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
-  <div class="bg-fluid">
-    <div class="blob"></div>
-    <div class="blob"></div>
-    <div class="blob"></div>
-  </div>
+  <!-- Toast notifications -->
+  <div id="toastContainer" aria-live="polite"></div>
 
-  <!-- Warning Modal -->
-  <div class="modal-overlay" id="warningModal">
-    <div class="modal">
-      <h2>Before you continue</h2>
-      <p>
-        Your message will be submitted as a <strong>public GitHub issue</strong>.
-        Your GitHub username will be visible. Do not include sensitive or private information.
-      </p>
-      <div class="modal-actions">
-        <button class="modal-btn modal-btn-cancel" id="modalCancel">Cancel</button>
-        <button class="modal-btn modal-btn-accept" id="modalAccept">I Understand</button>
-      </div>
+  <!-- Main card -->
+  <main>
+    <div class="glass-card">
+      <h1>Get in Touch</h1>
+      <p class="subtitle">Send me a message via GitHub</p>
+
+      <form id="contactForm" autocomplete="off">
+        <div class="field">
+          <label for="name">Name <span class="optional">(optional)</span></label>
+          <input type="text" id="name" name="name" placeholder="Your name">
+        </div>
+
+        <div class="field">
+          <label for="message">Message</label>
+          <textarea id="message" name="message" placeholder="What's on your mind?" required rows="4"></textarea>
+        </div>
+
+        <button type="submit" id="submitBtn">
+          <svg class="btn-icon" viewBox="0 0 16 16" width="18" height="18" fill="currentColor">
+            <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/>
+          </svg>
+          <span class="btn-text">Continue with GitHub</span>
+        </button>
+      </form>
     </div>
-  </div>
-
-  <!-- Toast Container -->
-  <div class="toast-container" id="toastContainer"></div>
-
-  <div class="card">
-    <h1>Get in Touch</h1>
-    <p class="subtitle">Send me a message through GitHub's secure authentication.</p>
-
-    <form id="contactForm" autocomplete="off">
-      <div class="field">
-        <label for="name">Name <span class="optional-tag">— optional</span></label>
-        <input type="text" id="name" name="name" placeholder="Your name" />
-      </div>
-
-      <div class="field">
-        <label for="message">Message</label>
-        <textarea id="message" name="message" placeholder="Write your message…" required></textarea>
-      </div>
-
-      <button type="submit">Continue with GitHub</button>
-    </form>
-  </div>
+  </main>
 
   <!-- Dock -->
-  <nav class="dock" id="dock">
-    <button class="dock-btn" id="themeToggle" data-tooltip="Toggle theme" aria-label="Toggle theme">
-      <svg id="themeIcon" viewBox="0 0 24 24">
-        <circle cx="12" cy="12" r="5" />
-        <line x1="12" y1="1" x2="12" y2="3" />
-        <line x1="12" y1="21" x2="12" y2="23" />
-        <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
-        <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
-        <line x1="1" y1="12" x2="3" y2="12" />
-        <line x1="21" y1="12" x2="23" y2="12" />
-        <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
-        <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
+  <nav id="dock" class="dock">
+    <button id="themeToggle" class="dock-item" title="Toggle theme" aria-label="Toggle theme">
+      <svg id="themeIcon" viewBox="0 0 24 24" width="20" height="20" fill="none"
+        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
       </svg>
     </button>
 
-    <div class="dock-separator"></div>
-
-    <a class="dock-btn" href="https://github.com/Syrthax/portfolio-contact-relay" target="_blank" rel="noopener" data-tooltip="GitHub Repo" aria-label="GitHub Repository">
-      <svg viewBox="0 0 24 24">
-        <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22" />
+    <a href="https://github.com/Syrthax/portfolio-contact-relay" target="_blank"
+      rel="noopener" class="dock-item" title="View source" aria-label="GitHub repository">
+      <svg viewBox="0 0 16 16" width="20" height="20" fill="currentColor">
+        <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/>
       </svg>
     </a>
 
-    <a class="dock-btn" href="https://sarthakg.tech" target="_blank" rel="noopener" data-tooltip="Portfolio" aria-label="Portfolio Website">
-      <svg viewBox="0 0 24 24">
-        <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-        <polyline points="9 22 9 12 15 12 15 22" />
+    <a href="https://sarthakg.tech" target="_blank" rel="noopener"
+      class="dock-item" title="Portfolio" aria-label="Portfolio">
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none"
+        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="10"/>
+        <line x1="2" y1="12" x2="22" y2="12"/>
+        <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10
+                 15.3 15.3 0 0 1-4-10A15.3 15.3 0 0 1 12 2z"/>
       </svg>
     </a>
   </nav>
