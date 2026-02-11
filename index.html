@@ -600,31 +600,31 @@
       REDIRECT_URI: window.location.origin + window.location.pathname,
       OWNER: "Syrthax",
       REPO: "portfolio-contact-relay",
-      WORKFLOW_FILE: "contact-relay.yml"
+      // Fine-grained PAT with ONLY Contents:write permission on this repo.
+      // This token can ONLY trigger repository_dispatch — it cannot read code,
+      // manage issues, or access any other repo. Safe to embed in public frontend.
+      RELAY_TOKEN: "REPLACE_WITH_RELAY_PAT"
     };
 
     // ════════════════════════════════════════════════════════════
-    //  SECURITY NOTE
+    //  ARCHITECTURE NOTE
     // ════════════════════════════════════════════════════════════
     //
-    //  Secure OAuth token exchange requires a backend.
-    //  The POST to /login/oauth/access_token needs client_secret,
-    //  which MUST NEVER be exposed in frontend code.
+    //  Static site (GitHub Pages) — no backend available.
     //
-    //  For production, use one of:
-    //    1. A lightweight proxy (e.g. Cloudflare Worker) that holds
-    //       the client_secret and performs the token exchange.
-    //    2. GitHub's Device Flow (no secret needed, different UX).
-    //    3. A GitHub Action relay via repository_dispatch.
+    //  Flow:
+    //  1. User fills form → payload saved to localStorage
+    //  2. Redirect to GitHub OAuth (scope: read:user only)
+    //  3. GitHub redirects back with ?code=
+    //  4. Frontend sends code + payload via repository_dispatch
+    //     using a fine-grained RELAY_TOKEN (PAT)
+    //  5. GitHub Actions workflow receives the dispatch:
+    //     a. Exchanges code → access_token (server-side, with client_secret)
+    //     b. Fetches GitHub username from token
+    //     c. Creates issue with sender info + message
     //
-    //  This implementation uses scope=repo so the user's OAuth
-    //  token (after exchange) triggers workflow_dispatch.
-    //  The user authorizes themselves — their token triggers the
-    //  workflow on their behalf.
-    //
-    //  The exchangeCodeForToken() function sends client_id + code
-    //  WITHOUT client_secret. A backend proxy must intercept this
-    //  or handle the exchange to make it functional.
+    //  Token exchange happens ONLY in the workflow (server-side).
+    //  No CORS issues. No client_secret in frontend.
     //
     // ════════════════════════════════════════════════════════════
 
@@ -711,89 +711,29 @@
     }
 
     // ════════════════════════════════════════════════════════════
-    //  OAUTH: EXCHANGE CODE FOR ACCESS TOKEN
+    //  SEND REPOSITORY DISPATCH
     // ════════════════════════════════════════════════════════════
     //
-    //  NOTE: This POST requires client_secret to succeed.
-    //  Without a backend proxy, this call will fail.
-    //  See SECURITY NOTE above.
+    //  Sends the OAuth code + form payload to the repo via
+    //  repository_dispatch. The GitHub Actions workflow handles
+    //  code-to-token exchange server-side using secrets.
 
-    async function exchangeCodeForToken(code) {
-      console.log('[OAuth] Exchanging code for access token…');
+    async function sendDispatch(code, payload) {
+      console.log('[Dispatch] Sending repository_dispatch…');
 
-      const response = await fetch('https://github.com/login/oauth/access_token', {
-        method: 'POST',
-        headers: {
-          'Accept': 'application/json',
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          client_id: CONFIG.CLIENT_ID,
-          code: code
-          // client_secret intentionally omitted — must be handled by a backend proxy
-        })
-      });
-
-      if (!response.ok) {
-        throw new Error(`Token exchange failed (HTTP ${response.status})`);
-      }
-
-      const data = await response.json();
-
-      if (data.error) {
-        throw new Error(`OAuth error: ${data.error_description || data.error}`);
-      }
-
-      if (!data.access_token) {
-        throw new Error('No access_token returned. A backend proxy is required for the client_secret exchange.');
-      }
-
-      console.log('[OAuth] Access token obtained');
-      return data.access_token;
-    }
-
-    // ════════════════════════════════════════════════════════════
-    //  FETCH AUTHENTICATED GITHUB USER
-    // ════════════════════════════════════════════════════════════
-
-    async function fetchGitHubUser(token) {
-      console.log('[GitHub] Fetching authenticated user…');
-
-      const response = await fetch('https://api.github.com/user', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Accept': 'application/vnd.github+json'
-        }
-      });
-
-      if (!response.ok) {
-        throw new Error(`Failed to fetch user (HTTP ${response.status})`);
-      }
-
-      const user = await response.json();
-      console.log(`[GitHub] Authenticated as @${user.login}`);
-      return user.login;
-    }
-
-    // ════════════════════════════════════════════════════════════
-    //  TRIGGER WORKFLOW DISPATCH
-    // ════════════════════════════════════════════════════════════
-
-    async function triggerWorkflow(token, payload) {
-      console.log('[Workflow] Triggering workflow_dispatch…');
-
-      const url = `https://api.github.com/repos/${CONFIG.OWNER}/${CONFIG.REPO}/actions/workflows/${CONFIG.WORKFLOW_FILE}/dispatches`;
+      const url = `https://api.github.com/repos/${CONFIG.OWNER}/${CONFIG.REPO}/dispatches`;
 
       const response = await fetch(url, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${token}`,
+          'Authorization': `Bearer ${CONFIG.RELAY_TOKEN}`,
           'Accept': 'application/vnd.github+json',
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          ref: 'main',
-          inputs: {
+          event_type: 'contact_message',
+          client_payload: {
+            code: code,
             name: payload.name || '',
             message: payload.message
           }
@@ -802,53 +742,11 @@
 
       if (!response.ok) {
         const errBody = await response.text();
-        console.error('[Workflow] Dispatch failed:', errBody);
-        throw new Error(`Workflow dispatch failed (HTTP ${response.status})`);
+        console.error('[Dispatch] Failed:', errBody);
+        throw new Error(`Repository dispatch failed (HTTP ${response.status})`);
       }
 
-      console.log('[Workflow] Dispatch triggered successfully');
-    }
-
-    // ════════════════════════════════════════════════════════════
-    //  CREATE ISSUE DIRECTLY (fallback if workflow not needed)
-    // ════════════════════════════════════════════════════════════
-
-    async function createIssue(token, username, payload) {
-      console.log('[GitHub] Creating issue…');
-
-      const url = `https://api.github.com/repos/${CONFIG.OWNER}/${CONFIG.REPO}/issues`;
-
-      const body = [
-        '---',
-        `Name: ${payload.name || 'Not provided'}`,
-        `GitHub: @${username}`,
-        '',
-        'Message:',
-        payload.message,
-        '',
-        '---',
-        'Submitted via sarthakg.tech contact form'
-      ].join('\n');
-
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Accept': 'application/vnd.github+json',
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          title: `Contact from @${username}`,
-          body: body
-        })
-      });
-
-      if (!response.ok) {
-        throw new Error(`Issue creation failed (HTTP ${response.status})`);
-      }
-
-      const issue = await response.json();
-      console.log(`[GitHub] Issue created: ${issue.html_url}`);
+      console.log('[Dispatch] Triggered successfully (HTTP 204)');
     }
 
     // ════════════════════════════════════════════════════════════
@@ -863,11 +761,13 @@
 
       console.log('[Callback] OAuth code detected, processing…');
 
+      // Clean URL immediately
+      history.replaceState(null, '', window.location.pathname);
+
       // Retrieve stored payload
       const raw = localStorage.getItem('contact_payload');
       if (!raw) {
         showToast('error', 'Session expired. Please submit the form again.');
-        history.replaceState(null, '', window.location.pathname);
         return;
       }
 
@@ -875,24 +775,14 @@
       setFormLoading(true);
 
       try {
-        // Step 1: Exchange code for token
-        const token = await exchangeCodeForToken(code);
-
-        // Step 2: Fetch GitHub username
-        const username = await fetchGitHubUser(token);
-
-        // Step 3: Trigger workflow with payload
-        await triggerWorkflow(token, {
-          name: payload.name ? `${payload.name} (@${username})` : `@${username}`,
-          message: payload.message
-        });
+        // Send code + payload to GitHub Actions via repository_dispatch
+        await sendDispatch(code, payload);
 
         // Success — clean up
         localStorage.removeItem('contact_payload');
-        history.replaceState(null, '', window.location.pathname);
-        showToast('success', 'Message sent successfully via GitHub.');
+        showToast('success', 'Message sent! You'll receive a confirmation issue shortly.');
         submitBtn.textContent = 'Sent ✓';
-        console.log('[Callback] Complete — message sent');
+        console.log('[Callback] Complete — dispatch sent');
 
       } catch (err) {
         console.error('[Callback] Error:', err.message);
@@ -930,11 +820,11 @@
       localStorage.setItem('contact_payload', JSON.stringify({ name, message }));
       console.log('[Form] Payload stored, redirecting to GitHub OAuth…');
 
-      // Redirect to GitHub OAuth
+      // Redirect to GitHub OAuth — only need read:user scope now
       window.location.href =
         'https://github.com/login/oauth/authorize' +
         '?client_id=' + encodeURIComponent(CONFIG.CLIENT_ID) +
-        '&scope=repo' +
+        '&scope=read:user' +
         '&redirect_uri=' + encodeURIComponent(CONFIG.REDIRECT_URI);
     }
 
